@@ -25,7 +25,7 @@
 __doc__ = """
 Module to simply, but flexibly calculate finite differences on numpy grids or functions.
 
-Note: This module is neither optimised nor parallelised and is not intended to be used for high-performance applications. 
+Note: This module is neither optimised nor parallelised and is not intended to be used for high-performance applications.
 """
 __author__ = "Jacob S. Wilkins"
 
@@ -66,19 +66,32 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
     elif isinstance(derivOrders, int):
         maxDerivOrder = derivOrders
         derivOrders = (derivOrders,)
-    else: raise TypeError("derivOrders must be of type int or tuple/list of ints")
+    else:
+        raise TypeError("derivOrders must be of type int or tuple/list of ints")
 
-    if not isinstance(maxDerivOrder, int):raise TypeError("derivOrders must be of type int")
+    if any(derivOrder < 1 for derivOrder in derivOrders):
+        raise ValueError("Cannot caclulate negative or 0th order derivatives")
+
+    if not isinstance(maxDerivOrder, int):
+        raise TypeError("derivOrders must be of type int")
 
     if points is None:
         if direction == 0:
-            points = range (-stencil, stencil + 1) #, key = lambda x:abs(x)
+            points = range (-stencil, stencil + 1)
         elif direction == 1:
             points = list(range ( 0, stencil + 1))
         elif direction == -1:
-            points = list(range ( 0, -stencil-1, -1))
-        else: raise ValueError("direction must be one of -1, 0, 1")
+            points = list(range (-stencil, 1))
+        else:
+            raise ValueError("direction must be one of -1, 0, 1")
+    else:
+        points = sorted(points)
 
+    diffs = numpy.zeros(len(points))
+    for i in range(0,len(points)-1):
+        diffs[i] = 1. / (points[i+1] - points[i])
+    diffs[-1] = 1. / (points[-1] - points[-2])
+    
     # Reuse old coeffs if available
     if points == _stored_points and \
        maxDerivOrder < len(_stored_coeffs) and \
@@ -87,7 +100,8 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
         return points, [_stored_coeffs[order] for order in derivOrders]
 
 
-    if len(points) < maxDerivOrder: raise ValueError("Stencil larger than possible")
+    if len(points) < maxDerivOrder:
+        raise ValueError("Requested stencil larger than possible")
 
     coeffs = numpy.zeros( (maxDerivOrder + 1, len(points), len(points)) ) # Need to account for zero points
 
@@ -99,8 +113,6 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
             c3 = points[n] - points[v]
             c2 *= c3
 
-            if n < maxDerivOrder: coeffs[n][n-1][v] = 0
-
             for m in range(0, min(n,maxDerivOrder)+1):
                 coeffs[m][n][v] = (( points[n] - x0 ) * coeffs[m][n-1][v] - m * coeffs[m-1][n-1][v])/c3
 
@@ -111,11 +123,11 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
 
     if store:
         storeN = (storeN[0], min(maxDerivOrder, storeN[1]) )
-        _stored_coeffs  = [coeffs[i][-1][:] for i in range(*storeN) ]
+        _stored_coeffs  = [coeffs[i][-1][:] * (diffs**i) for i in range(*storeN) ]
         _stored_points  = points
         _stored_N       = storeN
 
-    return points, [coeffs[i][-1][:] for i in derivOrders ]
+    return points, tuple(coeffs[i][-1][:] * (diffs**i) for i in derivOrders)
 
 
 def _finite_d_point_func( F, x, h, order, points, prefacs, args, kwargs):
@@ -161,8 +173,7 @@ def finite_d( F, h, order = None, stencil = None, x = None, points = None, prefa
     if points is not None and prefacs is not None:
         pass
     elif order is not None and stencil is not None:
-        points, prefacs = finite_d_coeffs(stencil, order)
-        prefacs = prefacs[0]
+        points, (prefacs,) = finite_d_coeffs(stencil, order)
     else:
         raise ValueError("Must specify either points and prefacs or stencil and derivative order")
 
@@ -196,3 +207,56 @@ def finite_d( F, h, order = None, stencil = None, x = None, points = None, prefa
             yield dx
     else:
         raise TypeError
+
+if __name__ == "__main__":
+    # Run Unit tests
+
+    ### Stencil tests
+    
+    # Centred test
+    _, (testVal,) = finite_d_coeffs( stencil = 5, derivOrders = 6, direction = 0, store = False )
+    expectVal = numpy.array ([ 13/240, -19/24, 87/16, -39/2, 323/8, -1023/20, 323/8, -39/2, 87/16, -19/24, 13/240 ])
+    print("Maximum deviation, Centred, order 6, stencil 5: ", max( abs(testVal - expectVal)))
+    assert all( abs(testVal - expectVal) < 1e-10 ), "Not all values within error"
+
+    # Forward Test
+    _, (testVal,) = finite_d_coeffs( stencil = 8, derivOrders = 4, direction = 1, store = False)
+    expectVal = numpy.array([1069/80, -1316/15, 15289/60, -2144/5, 10993/24, -4772/15, 2803/20, -536/15, 967/240])
+    print("Maximum deviation, Forward, order 4, stencil 8: ", max( abs(testVal - expectVal)))
+    assert all( abs(testVal - expectVal) < 1e-10 ), "Not all values within error"
+
+    # Backward test
+    _, (testVal,) = finite_d_coeffs( stencil = 8, derivOrders = 4, direction = -1, store = False )
+    expectVal = expectVal[::-1]
+    print("Maximum deviation, Backward, order 4, stencil 8: ", max( abs(testVal - expectVal)))
+    assert all( abs(testVal - expectVal) < 1e-10 ), "Not all values within error"
+
+    ### Derivative tests
+    
+    # Test first, second and third derivative quartic
+    f = lambda x : x**3
+
+    # Point tests
+    *testVal, = finite_d(f, 0.01, order = 1, stencil = 5, x = 4)
+    assert abs(testVal[0] - 3*(4**2)) < 1e-5, "Point test order 1 derivative failed"
+
+    *testVal, = finite_d(f, 0.01, order = 2, stencil = 5, x = 4)
+    assert abs(testVal[0] - 6*(4**1)) < 1e-5, "Point test order 2 derivative failed"
+
+    *testVal, = finite_d(f, 0.01, order = 3, stencil = 5, x = 4)
+    assert abs(testVal[0] - 6) < 1e-5, "Point test order 3 derivative failed"
+
+    # Line tests
+    vals = numpy.array([4,5,6])
+
+    *testVal, = finite_d(f, 0.01, order = 1, stencil = 5, x = vals)
+    testVal = numpy.array(testVal)
+    assert all(abs(testVal - 3*(vals**2)) < 1e-5), "Line test order 1 derivative failed"
+
+    *testVal, = finite_d(f, 0.01, order = 2, stencil = 5, x = vals)
+    testVal = numpy.array(testVal)
+    assert all(abs(testVal - 6*(vals**1)) < 1e-5), "Line test order 2 derivative failed"
+
+    *testVal, = finite_d(f, 0.01, order = 3, stencil = 5, x = vals)
+    testVal = numpy.array(testVal)
+    assert all(abs(testVal - 6) < 1e-5), "Line test order 3 derivative failed"
