@@ -91,7 +91,6 @@ def _finite_d_point_func( F, x, h, order, points, prefacs, args):
 
 def _finite_d_point_grid_1D( grid, x, h, order, points, prefacs, boundary = None ):
     if boundary is None: # No boundary == Periodic
-        print("BEEP:", sum ( prefac * grid[ (x + point)%len(grid) ] for point, prefac in zip(points, prefacs)) / (h**order))
         return sum ( prefac * grid[ (x + point)%len(grid) ] for point, prefac in zip(points, prefacs)) / (h**order)
     else:
         return sum ( (prefac * grid[ (x + point) ] if 0 <= x + point < len(grid) else prefac*boundary)
