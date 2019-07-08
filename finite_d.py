@@ -79,9 +79,9 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
         if direction == 0:
             points = range (-stencil, stencil + 1)
         elif direction == 1:
-            points = list(range ( 0, stencil + 1))
+            points = range ( 0, stencil + 1)
         elif direction == -1:
-            points = list(range (-stencil, 1))
+            points = range (-stencil, 1)
         else:
             raise ValueError("direction must be one of -1, 0, 1")
     else:
@@ -216,6 +216,8 @@ if __name__ == "__main__":
     # Centred test
     _, (testVal,) = finite_d_coeffs( stencil = 5, derivOrders = 6, direction = 0, store = False )
     expectVal = numpy.array ([ 13/240, -19/24, 87/16, -39/2, 323/8, -1023/20, 323/8, -39/2, 87/16, -19/24, 13/240 ])
+    print(testVal)
+    print(expectVal)
     print("Maximum deviation, Centred, order 6, stencil 5: ", max( abs(testVal - expectVal)))
     assert all( abs(testVal - expectVal) < 1e-10 ), "Not all values within error"
 
@@ -238,6 +240,7 @@ if __name__ == "__main__":
 
     # Point tests
     *testVal, = finite_d(f, 0.01, order = 1, stencil = 5, x = 4)
+    print(testVal)
     assert abs(testVal[0] - 3*(4**2)) < 1e-5, "Point test order 1 derivative failed"
 
     *testVal, = finite_d(f, 0.01, order = 2, stencil = 5, x = 4)
@@ -260,3 +263,4 @@ if __name__ == "__main__":
     *testVal, = finite_d(f, 0.01, order = 3, stencil = 5, x = vals)
     testVal = numpy.array(testVal)
     assert all(abs(testVal - 6) < 1e-5), "Line test order 3 derivative failed"
+
