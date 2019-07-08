@@ -28,7 +28,7 @@ import itertools
 from collections.abc import Iterable
 
 _stored_coeffs  = []
-_stored_stencil = None
+_stored_points  = None
 _stored_N       = None
 
 def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None, store = True, storeN = (0,4) ):
@@ -44,13 +44,13 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
     direction     (-1,0,1)           : Backward, Centre, Forward difference
     x0                               : centre-point of derivative
     store         (bool)             : Store calculated coeffs in array for reuse
-    storeN        (tuple(int))       : range of values to store in array
+    storeN        (tuple(int))       : range of derivative orders to keep stored in array
 
     Returns:
     list of lists of coefficients for finite differences of derivOrders in order specified by tuple
     """
     global _stored_coeffs
-    global _stored_stencil
+    global _stored_points
     global _stored_N
 
 
@@ -73,7 +73,7 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
         else: raise ValueError("direction must be one of -1, 0, 1")
 
     # Reuse old coeffs if available
-    if stencil == _stored_stencil and \
+    if points == _stored_points and \
        maxDerivOrder < len(_stored_coeffs) and \
        all( order in range(*_stored_N) for order in derivOrders) and \
        points is None:
@@ -105,7 +105,7 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
     if store:
         storeN = (storeN[0], min(maxDerivOrder, storeN[1]) )
         _stored_coeffs  = [coeffs[i][-1][:] for i in range(*storeN) ]
-        _stored_stencil = stencil
+        _stored_points  = points
         _stored_N       = storeN
 
     return points, [coeffs[i][-1][:] for i in derivOrders ]
