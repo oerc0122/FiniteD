@@ -91,6 +91,7 @@ def _finite_d_point_func( F, x, h, order, points, prefacs, args):
 
 def _finite_d_point_grid_1D( grid, x, h, order, points, prefacs, boundary = None ):
     if boundary is None: # No boundary == Periodic
+        print("BEEP:", sum ( prefac * grid[ (x + point)%len(grid) ] for point, prefac in zip(points, prefacs)) / (h**order))
         return sum ( prefac * grid[ (x + point)%len(grid) ] for point, prefac in zip(points, prefacs)) / (h**order)
     else:
         return sum ( (prefac * grid[ (x + point) ] if 0 <= x + point < len(grid) else prefac*boundary)
@@ -130,10 +131,11 @@ def finite_d( F, h, order, stencil, x = None, points = None, *funcArgs ):
             dx = 0.
             for dim in range(x.ndim):
 
-                currSlice = [index if i != dim else ... for i,index in enumerate(indices) ]
+                currSlice = tuple([index if i != dim else ... for i,index in enumerate(indices) ])
                 dimSlice = x[currSlice]
-                
-                dx += _finite_d_point_grid_1D( x, indices[dim], h, order, points, prefacs)
+
+                dx += _finite_d_point_grid_1D( dimSlice, indices[dim], h, order, points, prefacs)
+
             yield dx
     else:
         raise TypeError
