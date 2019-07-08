@@ -1,6 +1,7 @@
 import math
 import numpy
 import itertools
+from collections.abc import Iterable
 
 _stored_coeffs  = []
 _stored_stencil = None
@@ -14,15 +15,15 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
     Mathematics of Computation, 51 (184): 699–706, doi:10.1090/S0025-5718-1988-0935077-0, ISSN 0025-5718.
 
     In:
-    stencil (int) : Order of stencil to generate
-    maxDerivOrder (tuple(int) | int) : Highest order of derivative to generate
-    direction (-1,0,1) : Backward, Centre, Forward difference
-    x0 : centre-point of derivative
-    store (bool) : Store calculated coeffs in array for reuse
-    storeN (tuple(int)) : range of values to store in array
+    stencil       (int)              : Order of stencil to generate
+    derivOrders (tuple(int) | int)   : Orders of derivative to generate
+    direction     (-1,0,1)           : Backward, Centre, Forward difference
+    x0                               : centre-point of derivative
+    store         (bool)             : Store calculated coeffs in array for reuse
+    storeN        (tuple(int))       : range of values to store in array
 
     Returns:
-    list of coefficients for finite differences
+    list of lists of coefficients for finite differences of derivOrders in order specified by tuple
     """
     global _stored_coeffs
     global _stored_stencil
@@ -86,8 +87,8 @@ def finite_d_coeffs( stencil, derivOrders, direction = 0, x0 = 0., points = None
     return points, [coeffs[i][-1][:] for i in derivOrders ]
 
 
-def _finite_d_point_func( F, x, h, order, points, prefacs, args):
-    return sum ( prefac * F( x + point*h, *args )  for point, prefac in zip(points, prefacs)) / (h**order)
+def _finite_d_point_func( F, x, h, order, points, prefacs, args, kwargs):
+    return sum ( prefac * F( x + point*h, *args, **kwargs )  for point, prefac in zip(points, prefacs)) / (h**order)
 
 def _finite_d_point_grid_1D( grid, x, h, order, points, prefacs, boundary = None ):
     if boundary is None: # No boundary == Periodic
@@ -96,25 +97,51 @@ def _finite_d_point_grid_1D( grid, x, h, order, points, prefacs, boundary = None
         return sum ( (prefac * grid[ (x + point) ] if 0 <= x + point < len(grid) else prefac*boundary)
                      for point, prefac in zip(points, prefacs)) / (h**order)
 
-def finite_d( F, h, order, stencil, x = None, points = None, *funcArgs ):
+def finite_d( F, h, order = None, stencil = None, x = None, points = None, prefacs = None, *funcArgs, **funcKwargs ):
     """
-    Perform a general N-order n-stencil finite difference derivative of a function over a range or a grid
-    """
-    points, prefacs = finite_d_coeffs(stencil, order)
+    Perform a general N-order n-stencil finite difference derivative of a function over a range or a grid.
 
-    prefacs = prefacs[0]
+    One of either order and stencil or points and prefacs must be defined. If both are defined, points and prefacs takes priority.
+    If order and stencil are specified the code can generate the desired coefficients and points automatically otherwise they can be passed in if manually generated via finite_d_coeffs or other means.
+
+    For numpy arrays:
+        x determines the slice of a numpy array to be operated over.
+        funcArgs and funcKwargs do nothing.
+    For functions:
+        x is either an iterable of arguments which are looped over or a single point to differentiate.
+
+    In:
+    F       (function | numpy.ndarray) : Function or grid to differentiate
+    stencil (int)                      : Order of stencil
+    h       (float)                    : step length for derivative
+    order   (int)                      : Derivative order for automatically generated stencils
+    stencil (int)                      : Stencil order for automatically generated stencils
+    x       (function arg | slice)     : For grids numpy slice to be acted upon
+                                         For functions the values of x to be acted upon
+    points  (list(float))              : List of stencil points to run over
+    prefacs (list(float))              : List of finite difference coefficients
+    *funcArgs (Any)                    : Extra arguments to be passed to F if function
+    **funcKwargs (Any)                 : Extra keyword arguments to be passed to F if function
+
+    Returns:
+    Generator of calculated finite differences
+    """
+
+    if points is not None and prefacs is not None:
+        pass
+    elif order is not None and stencil is not None:
+        points, prefacs = finite_d_coeffs(stencil, order)
+        prefacs = prefacs[0]
+    else:
+        raise ValueError("Must specify either points and prefacs or stencil and derivative order")
 
     if callable( F ):
 
-        assert (x is not None), "X is undefined in function call"
-
-        if isinstance( x, (int, float) ):
-            yield _finite_d_point_func( F, x, h, order, points, prefacs, funcArgs)
-        elif isinstance( x, (list, tuple)) :
+        if isinstance(x, Iterable):
             for xVal in x:
-                yield _finite_d_point_func( F, xVal, h, order, points, prefacs, funcArgs)
+                yield _finite_d_point_func( F, xVal, h, order, points, prefacs, funcArgs, funcKwargs)
         else:
-            raise TypeError
+            yield _finite_d_point_func( F, x, h, order, points, prefacs, funcArgs, funcKwargs)
 
     elif isinstance( F, numpy.ndarray ):
 
