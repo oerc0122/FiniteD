@@ -22,6 +22,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+__doc__ = """
+Module to simply, but flexibly calculate finite differences on numpy grids or functions.
+
+Note: This module is neither optimised nor parallelised and is not intended to be used for high-performance applications. 
+"""
+__author__ = "Jacob S. Wilkins"
+
 import math
 import numpy
 import itertools
